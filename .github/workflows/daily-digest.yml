@@ -1,0 +1,62 @@
+# Ежедневный дайджест в 08:00 по Москве (UTC+3 → 05:00 UTC).
+# GitHub cron всегда в UTC. У Москвы нет перехода на летнее время.
+name: Daily digest
+
+on:
+  schedule:
+    - cron: "0 5 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Только сбор и фильтр, без LLM и публикации в канал"
+        type: boolean
+        default: false
+
+concurrency:
+  group: daily-digest
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TZ: Europe/Moscow
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      CHANNEL_USERNAME: ${{ secrets.CHANNEL_USERNAME }}
+      RSS_FEED_URLS: ${{ secrets.RSS_FEED_URLS }}
+      NEWS_KEYWORDS: ${{ secrets.NEWS_KEYWORDS }}
+      OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run digest pipeline
+        run: |
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            python main.py --dry-run
+          else
+            python main.py
+          fi
+
+      - name: Upload digest log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest-log
+          path: logs/digest.log
+          if-no-files-found: ignore
+          retention-days: 14
