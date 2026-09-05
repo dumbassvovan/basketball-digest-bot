@@ -1,6 +1,9 @@
 # Secrets
 .env
 
+# Logs
+logs/*.log
+
 # Python
 .venv/
 venv/

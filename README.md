@@ -1,22 +1,39 @@
 # Telegram-бот на Python
 
-Каркас проекта: структура пакетов, зависимости и загрузка токенов из `.env`.
+Каркас проекта: RSS → фильтр → LLM-дайджест → публикация в Telegram-канал.
+
+## Главный скрипт
+
+Собирает новости, фильтрует, суммаризирует через LLM и публикует пост в канал.
+
+```bash
+source .venv/bin/activate
+python main.py
+```
+
+Только сбор и фильтр, без OpenAI и Telegram:
+
+```bash
+python main.py --dry-run
+```
+
+Ход работы пишется в консоль и в файл `logs/digest.log`.
+
+Нужны `TELEGRAM_BOT_TOKEN`, `CHANNEL_USERNAME`, `OPENAI_API_KEY` и `RSS_FEED_URLS` в `.env`. Бот должен быть администратором канала.
 
 ## Структура
 
 ```
 .
+├── main.py              # пайплайн: сбор → фильтр → LLM → канал
 ├── bot/
-│   ├── __init__.py
-│   ├── __main__.py      # python -m bot
-│   ├── app.py           # запуск polling
-│   ├── config.py        # чтение .env
-│   ├── handlers/        # команды Telegram
-│   └── services/        # RSS и OpenAI
-├── .env.example         # шаблон секретов (можно коммитить)
-├── .env                 # ваши токены (не коммитится)
-├── .gitignore
-├── requirements.txt
+│   ├── pipeline.py      # шаги пайплайна
+│   ├── logutil.py       # лог в файл
+│   ├── app.py           # polling-бот (команды в личке)
+│   ├── handlers/
+│   └── services/
+├── logs/digest.log
+├── .env.example
 └── README.md
 ```
 
@@ -112,6 +129,6 @@ source .venv/bin/activate
 python -m bot
 ```
 
-Команды в Telegram: `/start`, `/help`, `/news`, `/summarize <текст>`.
+Команды в личке: `/start`, `/help`, `/news`, `/digest`, `/summarize <текст>`.
 
-Библиотека `schedule` добавлена в зависимости на будущее (периодические задачи). Сейчас бот работает через long polling `python-telegram-bot`.
+Ежедневный запуск пайплайна в 08:00: `python -m bot.jobs`.
