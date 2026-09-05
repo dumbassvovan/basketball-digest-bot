@@ -26,11 +26,11 @@ jobs:
     env:
       TZ: Europe/Moscow
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      YANDEX_API_KEY: ${{ secrets.YANDEX_API_KEY }}
+      YANDEX_FOLDER_ID: ${{ secrets.YANDEX_FOLDER_ID }}
       CHANNEL_USERNAME: ${{ secrets.CHANNEL_USERNAME }}
       RSS_FEED_URLS: ${{ secrets.RSS_FEED_URLS }}
       NEWS_KEYWORDS: ${{ secrets.NEWS_KEYWORDS }}
-      OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

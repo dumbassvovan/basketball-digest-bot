@@ -1,4 +1,4 @@
-"""Команда /summarize — краткий пересказ вашего текста через OpenAI."""
+"""Команда /summarize — краткий пересказ вашего текста через YandexGPT."""
 
 from __future__ import annotations
 
@@ -7,8 +7,7 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from bot.config import get_settings
-from bot.services.openai_client import summarize_text
+from bot.services.yandex_client import summarize_text
 
 logger = logging.getLogger(__name__)
 
@@ -29,8 +28,7 @@ async def summarize_command(
         return
 
     try:
-        settings = get_settings()
-        summary = summarize_text(settings.openai_api_key, text)
+        summary = summarize_text(text)
     except Exception as exc:
         logger.warning("Команда /summarize: %s", exc)
         await update.message.reply_text(f"Не удалось сделать пересказ: {exc}")

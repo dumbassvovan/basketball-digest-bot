@@ -1,7 +1,7 @@
 """Общие числа и тексты проекта.
 
 Чтобы не разбрасывать «магические» значения по файлам:
-время дайджеста, лимиты Telegram, модель OpenAI и т.п. живут здесь.
+время дайджеста, лимиты Telegram, модель YandexGPT и т.п. живут здесь.
 """
 
 from __future__ import annotations
@@ -27,10 +27,14 @@ TELEGRAM_MESSAGE_LIMIT = 4000
 # Команда /news может прислать несколько сообщений подряд — не больше этого.
 NEWS_REPLY_MAX_MESSAGES = 3
 
-# Модель и настройки вызовов OpenAI.
-OPENAI_DEFAULT_MODEL = "gpt-4o-mini"
+# Модель и настройки вызовов YandexGPT Lite.
+YANDEX_GPT_MODEL = "yandexgpt-lite"
+YANDEX_COMPLETION_URL = (
+    "https://llm.api.cloud.yandex.net/foundationModels/v1/completion"
+)
+YANDEX_REQUEST_TIMEOUT_SEC = 60
 DIGEST_TEMPERATURE = 0.5
-DIGEST_MAX_TOKENS = 2500
+DIGEST_MAX_TOKENS = 2000
 SUMMARIZE_TEMPERATURE = 0.3
 SUMMARIZE_MAX_TOKENS = 300
 DEFAULT_CHAT_TEMPERATURE = 0.4
@@ -42,12 +46,13 @@ SCHEDULER_POLL_SEC = 1
 
 # Заглушки из .env.example — считаем, что значение ещё не заполнено.
 PLACEHOLDER_BOT_TOKEN = "your-telegram-bot-token"
-PLACEHOLDER_OPENAI_KEY = "your-openai-api-key"
+PLACEHOLDER_YANDEX_KEY = "your-yandex-api-key"
+PLACEHOLDER_YANDEX_FOLDER = "your-yandex-folder-id"
 
 # Имена переменных окружения.
 ENV_BOT_TOKEN = "TELEGRAM_BOT_TOKEN"
-ENV_OPENAI_KEY = "OPENAI_API_KEY"
-ENV_OPENAI_MODEL = "OPENAI_MODEL"
+ENV_YANDEX_KEY = "YANDEX_API_KEY"
+ENV_YANDEX_FOLDER = "YANDEX_FOLDER_ID"
 ENV_CHANNEL = "CHANNEL_USERNAME"
 ENV_RSS_URLS = "RSS_FEED_URLS"
 ENV_RSS_URL_LEGACY = "RSS_FEED_URL"

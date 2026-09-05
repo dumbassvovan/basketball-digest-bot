@@ -9,7 +9,7 @@ HELP_TEXT = (
     "/help — эта справка\n"
     "/news — заголовки из RSS\n"
     "/digest — утренний дайджест через LLM\n"
-    "/summarize <текст> — краткий пересказ через OpenAI"
+    "/summarize <текст> — краткий пересказ через YandexGPT"
 )
 
 

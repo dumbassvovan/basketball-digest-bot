@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from bot.constants import DIGEST_MAX_TOKENS, DIGEST_TEMPERATURE, DIGEST_TOP_LIMIT, NEWS_HOURS
-from bot.services.openai_client import complete_chat
 from bot.services.rss import NewsItem, fetch_recent_news
+from bot.services.yandex_client import complete_chat
 
 # Промпт редактора: модель должна вернуть сразу текст поста, без пояснений.
 EDITOR_PROMPT = (
@@ -40,7 +40,6 @@ def compose_morning_digest(
     items: Sequence[NewsItem] | None = None,
     *,
     limit: int = DIGEST_TOP_LIMIT,
-    api_key: str | None = None,
 ) -> str:
     """Берёт топ новостей, спрашивает LLM и возвращает текст поста."""
     ranked = list(items) if items is not None else fetch_recent_news(hours=NEWS_HOURS)
@@ -52,7 +51,6 @@ def compose_morning_digest(
 
     user_message = "Новости:\n\n" + format_news_for_llm(top)
     return complete_chat(
-        api_key=api_key,
         system=EDITOR_PROMPT,
         user=user_message,
         temperature=DIGEST_TEMPERATURE,

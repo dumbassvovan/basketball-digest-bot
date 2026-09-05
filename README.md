@@ -11,7 +11,7 @@ source .venv/bin/activate
 python main.py
 ```
 
-Только сбор и фильтр, без OpenAI и Telegram:
+Только сбор и фильтр, без YandexGPT и Telegram:
 
 ```bash
 python main.py --dry-run
@@ -19,7 +19,7 @@ python main.py --dry-run
 
 Ход работы пишется в консоль и в файл `logs/digest.log`.
 
-Нужны `TELEGRAM_BOT_TOKEN`, `CHANNEL_USERNAME`, `OPENAI_API_KEY` и `RSS_FEED_URLS` в `.env`. Бот должен быть администратором канала.
+Нужны `TELEGRAM_BOT_TOKEN`, `CHANNEL_USERNAME`, `YANDEX_API_KEY`, `YANDEX_FOLDER_ID` и `RSS_FEED_URLS` в `.env`. Бот должен быть администратором канала.
 
 ## Структура
 
@@ -34,7 +34,7 @@ python main.py --dry-run
 │   ├── logutil.py          # лог в файл
 │   ├── app.py              # команды бота в личке
 │   ├── handlers/           # /start /news /digest /summarize
-│   └── services/           # RSS, рейтинг, OpenAI, публикация
+│   └── services/           # RSS, рейтинг, YandexGPT, публикация
 ├── logs/digest.log
 ├── .github/workflows/      # запуск каждый день в 08:00 МСК
 └── README.md
@@ -67,12 +67,12 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-В файл входят: `python-telegram-bot`, `feedparser`, `requests`, `openai`, `python-dotenv`, `schedule`.
+В файл входят: `python-telegram-bot`, `feedparser`, `requests`, `python-dotenv`, `schedule`.
 
 Проверка, что пакеты на месте:
 
 ```bash
-pip show python-telegram-bot feedparser requests openai python-dotenv schedule
+pip show python-telegram-bot feedparser requests python-dotenv schedule
 ```
 
 ## Токены в `.env`
@@ -86,11 +86,21 @@ cp .env.example .env
 2. Откройте `.env` и подставьте значения:
 
 - `TELEGRAM_BOT_TOKEN` — токен от [@BotFather](https://t.me/BotFather)
-- `CHANNEL_USERNAME` — username канала для тестовой публикации (`@my_channel`)
-- `OPENAI_API_KEY` — ключ OpenAI (нужен для `/digest` и `/summarize`)
-- `OPENAI_MODEL` — необязательно, по умолчанию `gpt-4o-mini`
-- `RSS_FEED_URLS` — RSS-ленты через запятую для `/news` (битые источники пропускаются)
-- `NEWS_KEYWORDS` — необязательный фильтр тем через запятую (по умолчанию NBA, баскетбол, Евролига, ВТБ и близкие слова)
+- `CHANNEL_USERNAME` — username канала (`@my_channel`)
+- `YANDEX_API_KEY` — API-ключ сервисного аккаунта Yandex Cloud
+- `YANDEX_FOLDER_ID` — ID каталога в Yandex Cloud (как узнать — ниже)
+- `RSS_FEED_URLS` — RSS-ленты через запятую
+- `NEWS_KEYWORDS` — необязательный фильтр тем
+
+### Как узнать YANDEX_FOLDER_ID
+
+1. Откройте [консоль Yandex Cloud](https://console.yandex.cloud/).
+2. Слева вверху выберите нужный **каталог** (folder), не облако целиком.
+3. На обзоре каталога найдите поле **Идентификатор** / **ID** — строка вроде `b1gxxxxxxxxxxxxxxxxx`.
+4. Либо откройте каталог и посмотрите адрес в браузере:  
+   `https://console.yandex.cloud/folders/<ВОТ_ЭТОТ_ID>/...`
+
+Ключ `YANDEX_API_KEY` создаётся в том же каталоге: **Сервисные аккаунты** → ваш аккаунт → **API-ключи** → создать ключ. У сервисного аккаунта должна быть роль на Foundation Models, например `ai.languageModels.user`.
 
 `python-dotenv` подхватывает этот файл при старте бота. Не публикуйте `.env` в git: он уже в `.gitignore`.
 
@@ -126,11 +136,11 @@ cron: "0 5 * * *"
 | Secret | Зачем |
 |---|---|
 | `TELEGRAM_BOT_TOKEN` | токен бота |
-| `OPENAI_API_KEY` | ключ LLM |
+| `YANDEX_API_KEY` | API-ключ YandexGPT |
+| `YANDEX_FOLDER_ID` | ID каталога Yandex Cloud |
 | `CHANNEL_USERNAME` | канал, например `@my_channel` |
 | `RSS_FEED_URLS` | ленты через запятую |
 | `NEWS_KEYWORDS` | необязательно |
-| `OPENAI_MODEL` | необязательно, иначе `gpt-4o-mini` |
 
 `.env` в git не кладите: Actions подставляет секреты как переменные окружения.
 
