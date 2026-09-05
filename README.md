@@ -71,6 +71,15 @@ cp .env.example .env
 
 `python-dotenv` подхватывает этот файл при старте бота. Не публикуйте `.env` в git: он уже в `.gitignore`.
 
+## Проверка RSS до запуска бота
+
+```bash
+source .venv/bin/activate
+python check_rss.py
+```
+
+Скрипт читает `RSS_FEED_URLS` из `.env` и для каждой ссылки пишет успех или ошибку.
+
 ## Запуск
 
 ```bash
