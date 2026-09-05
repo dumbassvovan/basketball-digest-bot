@@ -18,7 +18,9 @@ from bot.services.rss import fetch_recent_news
 def log_headlines() -> None:
     for item in fetch_recent_news(hours=24):
         published = item.published.isoformat() if item.published else "?"
-        print(f"{published} | {item.source} | {item.title} | {item.link}")
+        print(
+            f"вес={item.weight} | {published} | {item.source} | {item.title} | {item.link}"
+        )
 
 
 def run_scheduler() -> None:

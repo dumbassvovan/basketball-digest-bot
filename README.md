@@ -66,8 +66,10 @@ cp .env.example .env
 2. Откройте `.env` и подставьте значения:
 
 - `TELEGRAM_BOT_TOKEN` — токен от [@BotFather](https://t.me/BotFather)
+- `CHANNEL_USERNAME` — username канала для тестовой публикации (`@my_channel`)
 - `OPENAI_API_KEY` — ключ OpenAI (нужен для `/summarize`)
 - `RSS_FEED_URLS` — RSS-ленты через запятую для `/news` (битые источники пропускаются)
+- `NEWS_KEYWORDS` — необязательный фильтр тем через запятую (по умолчанию NBA, баскетбол, Евролига, ВТБ и близкие слова)
 
 `python-dotenv` подхватывает этот файл при старте бота. Не публикуйте `.env` в git: он уже в `.gitignore`.
 

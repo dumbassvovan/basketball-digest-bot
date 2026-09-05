@@ -12,6 +12,15 @@ import requests
 from dotenv import load_dotenv
 from requests import HTTPError, RequestException
 
+from bot.services.ranking import (
+    cosine_similarity,
+    matches_keywords,
+    parse_keywords,
+    same_source,
+    similarity_threshold,
+    title_vector,
+)
+
 REQUEST_TIMEOUT_SEC = 15
 USER_AGENT = "telegram-bot-rss/0.1"
 
@@ -22,6 +31,7 @@ class NewsItem:
     link: str
     published: datetime | None
     source: str
+    weight: int = 0
 
 
 def normalize_feed_url(url: str) -> str:
@@ -84,7 +94,9 @@ def fetch_recent_news(
     """Берёт RSS-ссылки из переменной окружения и возвращает новости за период.
 
     Ссылки в переменной задаются через запятую. Недоступные ленты пропускаются
-    с предупреждением в консоль. У каждой новости: заголовок, ссылка, дата, источник.
+    с предупреждением в консоль. Остаются материалы про баскетбол (NBA, Евролига,
+    ВТБ и др.). Вес — число похожих заголовков в других источниках
+    (cosine similarity). Список отсортирован по весу.
     """
     load_dotenv()
     raw = os.getenv(env_var) or os.getenv("RSS_FEED_URL") or ""
@@ -94,6 +106,7 @@ def fetch_recent_news(
         return []
 
     cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+    keywords = parse_keywords()
     items: list[NewsItem] = []
 
     for url in urls:
@@ -113,6 +126,10 @@ def fetch_recent_news(
             if published is None or published < cutoff:
                 continue
             title = str(entry.get("title") or "").strip() or "(без заголовка)"
+            summary = str(entry.get("summary") or entry.get("description") or "")
+            haystack = f"{title} {summary} {source}"
+            if not matches_keywords(haystack, keywords):
+                continue
             link = str(entry.get("link") or "").strip()
             items.append(
                 NewsItem(
@@ -123,11 +140,42 @@ def fetch_recent_news(
                 )
             )
 
-    items.sort(
-        key=lambda item: item.published or datetime.min.replace(tzinfo=timezone.utc),
+    return _rank_by_similar_sources(items)
+
+
+def _rank_by_similar_sources(items: list[NewsItem]) -> list[NewsItem]:
+    """+1 к весу за каждый похожий заголовок в другом источнике (cosine similarity)."""
+    threshold = similarity_threshold()
+    vectors = [title_vector(item.title) for item in items]
+    weights = [0] * len(items)
+
+    for i, left in enumerate(items):
+        for j in range(i + 1, len(items)):
+            right = items[j]
+            if same_source(left.source, right.source):
+                continue
+            if cosine_similarity(vectors[i], vectors[j]) >= threshold:
+                weights[i] += 1
+                weights[j] += 1
+
+    ranked = [
+        NewsItem(
+            title=item.title,
+            link=item.link,
+            published=item.published,
+            source=item.source,
+            weight=weights[index],
+        )
+        for index, item in enumerate(items)
+    ]
+    ranked.sort(
+        key=lambda item: (
+            item.weight,
+            item.published or datetime.min.replace(tzinfo=timezone.utc),
+        ),
         reverse=True,
     )
-    return items
+    return ranked
 
 
 def fetch_headlines(
