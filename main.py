@@ -1,15 +1,7 @@
-"""Главный скрипт дайджеста.
+"""Главный скрипт дайджеста: сбор → фильтр → нейросеть → канал.
 
-Собрать новости → отфильтровать → суммаризировать → опубликовать в канал.
-
-    source .venv/bin/activate
     python main.py
-
-Только сбор и фильтр (без OpenAI и Telegram):
-
     python main.py --dry-run
-
-Лог пишется в консоль и в logs/digest.log.
 """
 
 from __future__ import annotations
@@ -18,13 +10,15 @@ import argparse
 import logging
 import sys
 
-from bot.logutil import LOG_FILE, setup_logging
+from bot.constants import DIGEST_TOP_LIMIT, NEWS_HOURS
+from bot.logutil import setup_logging
 from bot.pipeline import run_pipeline
 
 logger = logging.getLogger("main")
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Разбирает флаги командной строки."""
     parser = argparse.ArgumentParser(
         description="Утренний баскетбольный дайджест: RSS → LLM → Telegram-канал.",
     )
@@ -36,19 +30,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--hours",
         type=int,
-        default=24,
-        help="За сколько часов брать новости (по умолчанию 24).",
+        default=NEWS_HOURS,
+        help="За сколько часов брать новости.",
     )
     parser.add_argument(
         "--limit",
         type=int,
-        default=10,
-        help="Сколько новостей отдать в LLM (по умолчанию 10).",
+        default=DIGEST_TOP_LIMIT,
+        help="Сколько новостей отдать в LLM.",
     )
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Точка входа. 0 — успех, 1 — ошибка (для GitHub Actions)."""
     args = parse_args(argv)
     log_path = setup_logging()
     logger.info("Старт пайплайна. Лог-файл: %s", log_path.resolve())

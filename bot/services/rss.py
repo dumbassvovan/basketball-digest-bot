@@ -1,18 +1,25 @@
-"""Чтение RSS через requests + feedparser."""
+"""Сбор новостей из RSS-лент.
+
+Что делает этот файл:
+1. Скачивает ленты из RSS_FEED_URLS.
+2. Оставляет новости за последние сутки.
+3. Фильтр по баскетбольным словам и расчёт «веса» (сколько других сайтов
+   написали похожее) делает filter_and_rank.
+"""
 
 from __future__ import annotations
 
 import logging
-import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
 import feedparser
 import requests
-from dotenv import load_dotenv
 from requests import HTTPError, RequestException
 
+from bot.config import rss_feeds_raw
+from bot.constants import NEWS_HOURS, RSS_TIMEOUT_SEC, RSS_USER_AGENT
 from bot.services.ranking import (
     cosine_similarity,
     matches_keywords,
@@ -21,14 +28,15 @@ from bot.services.ranking import (
     similarity_threshold,
     title_vector,
 )
+from bot.util import parse_feed_urls
 
-REQUEST_TIMEOUT_SEC = 15
-USER_AGENT = "telegram-bot-rss/0.1"
 logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
 class NewsItem:
+    """Одна новость: заголовок, ссылка, дата, сайт, вес и краткий текст из RSS."""
+
     title: str
     link: str
     published: datetime | None
@@ -37,27 +45,8 @@ class NewsItem:
     summary: str = ""
 
 
-def normalize_feed_url(url: str) -> str:
-    """Чинит схемы вида https:/example.com → https://example.com."""
-    url = url.strip()
-    if url.startswith("https:/") and not url.startswith("https://"):
-        return "https://" + url.removeprefix("https:/")
-    if url.startswith("http:/") and not url.startswith("http://"):
-        return "http://" + url.removeprefix("http:/")
-    return url
-
-
-def parse_feed_urls(raw: str) -> list[str]:
-    """Делит RSS_FEED_URLS по запятой и убирает пробелы вокруг ссылок."""
-    urls: list[str] = []
-    for part in raw.split(","):
-        url = normalize_feed_url(part)
-        if url:
-            urls.append(url)
-    return urls
-
-
 def _source_name(parsed: feedparser.FeedParserDict, feed_url: str) -> str:
+    """Имя источника: заголовок ленты или адрес сайта."""
     title = str(parsed.feed.get("title") or "").strip()
     if title:
         return title
@@ -66,6 +55,7 @@ def _source_name(parsed: feedparser.FeedParserDict, feed_url: str) -> str:
 
 
 def _entry_published(entry: feedparser.FeedParserDict) -> datetime | None:
+    """Дата новости из RSS. Если даты нет или она битая — возвращает None."""
     parsed_time = entry.get("published_parsed") or entry.get("updated_parsed")
     if not parsed_time:
         return None
@@ -76,10 +66,11 @@ def _entry_published(entry: feedparser.FeedParserDict) -> datetime | None:
 
 
 def _parse_feed(feed_url: str) -> feedparser.FeedParserDict:
+    """Скачивает XML ленты и разбирает его через feedparser."""
     response = requests.get(
         feed_url,
-        timeout=REQUEST_TIMEOUT_SEC,
-        headers={"User-Agent": USER_AGENT},
+        timeout=RSS_TIMEOUT_SEC,
+        headers={"User-Agent": RSS_USER_AGENT},
     )
     response.raise_for_status()
     parsed = feedparser.parse(response.content)
@@ -89,17 +80,37 @@ def _parse_feed(feed_url: str) -> feedparser.FeedParserDict:
     return parsed
 
 
-def collect_news(
-    *,
-    hours: int = 24,
-    env_var: str = "RSS_FEED_URLS",
+def _items_from_feed(
+    parsed: feedparser.FeedParserDict,
+    source: str,
+    cutoff: datetime,
 ) -> list[NewsItem]:
-    """Скачивает ленты и оставляет записи за последние `hours` часов (без фильтра тем)."""
-    load_dotenv()
-    raw = os.getenv(env_var) or os.getenv("RSS_FEED_URL") or ""
-    urls = parse_feed_urls(raw)
+    """Достаёт из одной ленты новости не старше cutoff."""
+    items: list[NewsItem] = []
+    for entry in parsed.entries:
+        published = _entry_published(entry)
+        if published is None or published < cutoff:
+            continue
+        title = str(entry.get("title") or "").strip() or "(без заголовка)"
+        summary = str(entry.get("summary") or entry.get("description") or "")
+        link = str(entry.get("link") or "").strip()
+        items.append(
+            NewsItem(
+                title=title,
+                link=link,
+                published=published,
+                source=source,
+                summary=summary,
+            )
+        )
+    return items
+
+
+def collect_news(*, hours: int = NEWS_HOURS) -> list[NewsItem]:
+    """Скачивает все ленты. Сломанный сайт пропускает и пишет предупреждение."""
+    urls = parse_feed_urls(rss_feeds_raw())
     if not urls:
-        logger.warning("В окружении нет %s.", env_var)
+        logger.warning("В окружении нет RSS_FEED_URLS.")
         return []
 
     cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
@@ -113,46 +124,34 @@ def collect_news(
             status = exc.response.status_code if exc.response is not None else "?"
             logger.warning("Источник RSS недоступен (%s): %s", status, url)
             continue
-        except (RequestException, RuntimeError) as exc:
+        except (RequestException, RuntimeError, OSError) as exc:
             logger.warning("Не удалось загрузить RSS %s: %s", url, exc)
+            continue
+        except Exception as exc:  # лента странная — не роняем весь сбор
+            logger.warning("Неожиданная ошибка RSS %s: %s", url, exc)
             continue
 
         source = _source_name(parsed, url)
-        kept = 0
-        for entry in parsed.entries:
-            published = _entry_published(entry)
-            if published is None or published < cutoff:
-                continue
-            title = str(entry.get("title") or "").strip() or "(без заголовка)"
-            summary = str(entry.get("summary") or entry.get("description") or "")
-            link = str(entry.get("link") or "").strip()
-            items.append(
-                NewsItem(
-                    title=title,
-                    link=link,
-                    published=published,
-                    source=source,
-                    summary=summary,
-                )
-            )
-            kept += 1
-        logger.info("Лента %s: записей за период — %s", source, kept)
+        from_feed = _items_from_feed(parsed, source, cutoff)
+        items.extend(from_feed)
+        logger.info("Лента %s: записей за период — %s", source, len(from_feed))
 
     logger.info("Всего собрано за %s ч: %s", hours, len(items))
     return items
 
 
 def filter_and_rank(items: list[NewsItem]) -> list[NewsItem]:
-    """Оставляет баскетбольные темы и считает вес по похожим заголовкам."""
+    """Оставляет баскетбол и ставит вес по похожим заголовкам на других сайтах."""
     keywords = parse_keywords()
-    kept: list[NewsItem] = []
-    for item in items:
-        haystack = f"{item.title} {item.summary} {item.source}"
-        if matches_keywords(haystack, keywords):
-            kept.append(item)
+    kept = [
+        item
+        for item in items
+        if matches_keywords(f"{item.title} {item.summary} {item.source}", keywords)
+    ]
+    shown = ", ".join(keywords[:6]) + ("…" if len(keywords) > 6 else "")
     logger.info(
         "Фильтр ключевых слов (%s): было %s, осталось %s",
-        ", ".join(keywords[:6]) + ("…" if len(keywords) > 6 else ""),
+        shown,
         len(items),
         len(kept),
     )
@@ -161,21 +160,16 @@ def filter_and_rank(items: list[NewsItem]) -> list[NewsItem]:
     return ranked
 
 
-def fetch_recent_news(
-    *,
-    hours: int = 24,
-    env_var: str = "RSS_FEED_URLS",
-) -> list[NewsItem]:
-    """Сбор за период + фильтр тем + вес. Список отсортирован по весу."""
-    return filter_and_rank(collect_news(hours=hours, env_var=env_var))
+def fetch_recent_news(*, hours: int = NEWS_HOURS) -> list[NewsItem]:
+    """Полный путь: сбор → фильтр → вес. Список от новых/важных к остальным."""
+    return filter_and_rank(collect_news(hours=hours))
 
 
-def _rank_by_similar_sources(items: list[NewsItem]) -> list[NewsItem]:
-    """+1 к весу за каждый похожий заголовок в другом источнике (cosine similarity)."""
+def _pair_weights(items: list[NewsItem]) -> list[int]:
+    """Для каждой новости: сколько похожих заголовков на других сайтах."""
     threshold = similarity_threshold()
     vectors = [title_vector(item.title) for item in items]
     weights = [0] * len(items)
-
     for i, left in enumerate(items):
         for j in range(i + 1, len(items)):
             right = items[j]
@@ -184,17 +178,14 @@ def _rank_by_similar_sources(items: list[NewsItem]) -> list[NewsItem]:
             if cosine_similarity(vectors[i], vectors[j]) >= threshold:
                 weights[i] += 1
                 weights[j] += 1
+    return weights
 
+
+def _rank_by_similar_sources(items: list[NewsItem]) -> list[NewsItem]:
+    """Вешает вес на новости и сортирует: сначала больший вес, потом свежее."""
+    weights = _pair_weights(items)
     ranked = [
-        NewsItem(
-            title=item.title,
-            link=item.link,
-            published=item.published,
-            source=item.source,
-            weight=weights[index],
-            summary=item.summary,
-        )
-        for index, item in enumerate(items)
+        replace(item, weight=weights[index]) for index, item in enumerate(items)
     ]
     ranked.sort(
         key=lambda item: (
@@ -204,31 +195,3 @@ def _rank_by_similar_sources(items: list[NewsItem]) -> list[NewsItem]:
         reverse=True,
     )
     return ranked
-
-
-def fetch_headlines(
-    feed_urls: list[str] | tuple[str, ...] | str,
-    limit: int = 5,
-) -> list[str]:
-    if isinstance(feed_urls, str):
-        urls = parse_feed_urls(feed_urls)
-    else:
-        urls = [normalize_feed_url(url) for url in feed_urls if url]
-
-    headlines: list[str] = []
-    for url in urls:
-        try:
-            parsed = _parse_feed(url)
-        except HTTPError as exc:
-            status = exc.response.status_code if exc.response is not None else "?"
-            logger.warning("Источник RSS недоступен (%s): %s", status, url)
-            continue
-        except (RequestException, RuntimeError) as exc:
-            logger.warning("Не удалось загрузить RSS %s: %s", url, exc)
-            continue
-
-        for entry in parsed.entries[:limit]:
-            title = str(entry.get("title") or "").strip() or "(без заголовка)"
-            link = str(entry.get("link") or "").strip()
-            headlines.append(f"• {title}\n  {link}" if link else f"• {title}")
-    return headlines

@@ -25,15 +25,18 @@ python main.py --dry-run
 
 ```
 .
-├── main.py              # пайплайн: сбор → фильтр → LLM → канал
+├── main.py                 # утренний дайджест в канал
 ├── bot/
-│   ├── pipeline.py      # шаги пайплайна
-│   ├── logutil.py       # лог в файл
-│   ├── app.py           # polling-бот (команды в личке)
-│   ├── handlers/
-│   └── services/
+│   ├── constants.py        # лимиты, время, имена переменных
+│   ├── config.py           # чтение .env
+│   ├── util.py             # разбор ссылок и @канала
+│   ├── pipeline.py         # шаги: сбор → фильтр → LLM → канал
+│   ├── logutil.py          # лог в файл
+│   ├── app.py              # команды бота в личке
+│   ├── handlers/           # /start /news /digest /summarize
+│   └── services/           # RSS, рейтинг, OpenAI, публикация
 ├── logs/digest.log
-├── .env.example
+├── .github/workflows/      # запуск каждый день в 08:00 МСК
 └── README.md
 ```
 

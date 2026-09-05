@@ -1,4 +1,4 @@
-"""Обработчики команд Telegram."""
+"""Подключение команд Telegram к приложению бота."""
 
 from telegram.ext import Application, CommandHandler
 
@@ -9,6 +9,7 @@ from bot.handlers.summarize import summarize_command
 
 
 def register_handlers(application: Application) -> None:
+    """Регистрирует /start, /help, /news, /digest и /summarize."""
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("news", news_command))

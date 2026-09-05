@@ -1,31 +1,42 @@
-"""Команда /news — заголовки из RSS за последние 24 часа."""
+"""Команда /news — свежие баскетбольные заголовки в личку."""
+
+from __future__ import annotations
+
+import logging
 
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from bot.services.rss import fetch_recent_news
+from bot.constants import NEWS_HOURS, NEWS_REPLY_MAX_MESSAGES
+from bot.services.rss import NewsItem, fetch_recent_news
+from bot.services.telegram_channel import pack_message_blocks
 
-TELEGRAM_MESSAGE_LIMIT = 4000
+logger = logging.getLogger(__name__)
 
 
-def _format_item(item) -> str:
+def _format_item(item: NewsItem) -> str:
+    """Одна новость для сообщения в Telegram."""
     published = (
         item.published.strftime("%Y-%m-%d %H:%M UTC")
         if item.published
         else "дата неизвестна"
     )
     link = f"\n{item.link}" if item.link else ""
-    return (
-        f"• [{item.weight}] {item.title}\n"
-        f"  {item.source} · {published}{link}"
-    )
+    return f"• [{item.weight}] {item.title}\n  {item.source} · {published}{link}"
 
 
 async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Отвечает списком новостей за сутки. Ошибки сети не роняют бота."""
     if update.message is None:
         return
 
-    items = fetch_recent_news(hours=24)
+    try:
+        items = fetch_recent_news(hours=NEWS_HOURS)
+    except Exception as exc:
+        logger.warning("Команда /news: %s", exc)
+        await update.message.reply_text(f"Не удалось загрузить новости: {exc}")
+        return
+
     if not items:
         await update.message.reply_text(
             "За последние 24 часа новостей нет, либо все ленты недоступны. "
@@ -33,17 +44,9 @@ async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         )
         return
 
-    chunks: list[str] = []
-    current = ""
-    for item in items:
-        block = _format_item(item)
-        if current and len(current) + 2 + len(block) > TELEGRAM_MESSAGE_LIMIT:
-            chunks.append(current)
-            current = block
-        else:
-            current = f"{current}\n\n{block}" if current else block
-    if current:
-        chunks.append(current)
-
-    for chunk in chunks[:3]:
+    chunks = pack_message_blocks(
+        [_format_item(item) for item in items],
+        max_messages=NEWS_REPLY_MAX_MESSAGES,
+    )
+    for chunk in chunks:
         await update.message.reply_text(chunk)

@@ -1,4 +1,8 @@
-"""Фильтр ключевых слов и вес новости по похожим заголовкам."""
+"""Ключевые слова и похожесть заголовков (cosine similarity).
+
+Зачем: из ленты выкидываем не-баскетбол и поднимаем сюжеты,
+которые повторили несколько изданий.
+"""
 
 from __future__ import annotations
 
@@ -7,6 +11,9 @@ import os
 import re
 from collections import Counter
 
+from bot.constants import DEFAULT_SIMILARITY_THRESHOLD, ENV_KEYWORDS, ENV_SIMILARITY
+
+# Слова, по которым узнаём баскетбольную тему (можно переопределить в .env).
 DEFAULT_KEYWORDS = (
     "nba",
     "нба",
@@ -29,6 +36,7 @@ DEFAULT_KEYWORDS = (
     "cska",
 )
 
+# Короткие слова, которые не помогают понять тему («в», «the»…).
 STOPWORDS = {
     "the",
     "a",
@@ -72,17 +80,19 @@ STOPWORDS = {
 }
 
 TOKEN_RE = re.compile(r"[a-zа-яё0-9]+", re.IGNORECASE)
-DEFAULT_SIMILARITY_THRESHOLD = 0.45
+MIN_TOKEN_LENGTH = 3
 
 
 def parse_keywords(raw: str | None = None) -> tuple[str, ...]:
-    text = (raw if raw is not None else os.getenv("NEWS_KEYWORDS", "")).strip()
+    """Список тем: из .env NEWS_KEYWORDS или встроенный набор."""
+    text = (raw if raw is not None else os.getenv(ENV_KEYWORDS, "")).strip()
     if not text:
         return DEFAULT_KEYWORDS
     return tuple(part.strip().casefold() for part in text.split(",") if part.strip())
 
 
 def _keyword_forms(keyword: str) -> tuple[str, ...]:
+    """Добавляет короткую основу, чтобы «Евролиги» находило «евролига»."""
     forms = [keyword]
     if len(keyword) >= 5 and keyword[-1] in "аяью":
         stem = keyword[:-1]
@@ -92,30 +102,32 @@ def _keyword_forms(keyword: str) -> tuple[str, ...]:
 
 
 def matches_keywords(text: str, keywords: tuple[str, ...] | None = None) -> bool:
+    """True, если в тексте есть хотя бы одно ключевое слово."""
     haystack = text.casefold()
     words = keywords if keywords is not None else parse_keywords()
     for keyword in words:
-        if not keyword:
-            continue
-        if any(form in haystack for form in _keyword_forms(keyword)):
+        if keyword and any(form in haystack for form in _keyword_forms(keyword)):
             return True
     return False
 
 
 def title_tokens(title: str) -> list[str]:
+    """Режет заголовок на слова, выкидывает короткие и стоп-слова."""
     tokens: list[str] = []
     for token in TOKEN_RE.findall(title.casefold()):
-        if len(token) < 3 or token in STOPWORDS:
+        if len(token) < MIN_TOKEN_LENGTH or token in STOPWORDS:
             continue
         tokens.append(token)
     return tokens
 
 
 def title_vector(title: str) -> Counter[str]:
+    """Счётчик слов заголовка — «вектор» для сравнения похожести."""
     return Counter(title_tokens(title))
 
 
 def cosine_similarity(left: Counter[str], right: Counter[str]) -> float:
+    """Число от 0 до 1: насколько два заголовка похожи по составу слов."""
     if not left or not right:
         return 0.0
     dot = sum(left[token] * right[token] for token in set(left) & set(right))
@@ -129,7 +141,8 @@ def cosine_similarity(left: Counter[str], right: Counter[str]) -> float:
 
 
 def similarity_threshold() -> float:
-    raw = os.getenv("NEWS_SIMILARITY_THRESHOLD", "").strip()
+    """Порог похожести из .env или значение по умолчанию."""
+    raw = os.getenv(ENV_SIMILARITY, "").strip()
     if not raw:
         return DEFAULT_SIMILARITY_THRESHOLD
     try:
@@ -140,4 +153,5 @@ def similarity_threshold() -> float:
 
 
 def same_source(left: str, right: str) -> bool:
+    """Один и тот же сайт? Тогда пару для веса не считаем."""
     return left.strip().casefold() == right.strip().casefold()

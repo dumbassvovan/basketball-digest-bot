@@ -1,4 +1,4 @@
-"""Команды /start и /help."""
+"""Команды /start и /help — короткое приветствие и список команд."""
 
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -14,6 +14,7 @@ HELP_TEXT = (
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Первое сообщение, когда человек нажал Start."""
     if update.message is None:
         return
     await update.message.reply_text(
@@ -22,6 +23,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Показывает список команд."""
     if update.message is None:
         return
     await update.message.reply_text(HELP_TEXT)

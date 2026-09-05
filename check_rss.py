@@ -1,23 +1,23 @@
 """Проверка RSS-лент из .env до запуска бота.
 
-Запуск из корня проекта:
-    source .venv/bin/activate
     python check_rss.py
 """
 
 from __future__ import annotations
 
-import os
 import sys
 from urllib.parse import urlparse
 
-from dotenv import load_dotenv
 import feedparser
 
-from bot.services.rss import parse_feed_urls
+from bot.config import rss_feeds_raw
+from bot.util import parse_feed_urls
+
+CHECK_USER_AGENT = "telegram-bot-rss-check/0.1"
 
 
 def site_name(url: str, feed_title: str = "") -> str:
+    """Человекочитаемое имя сайта для строки в консоли."""
     title = feed_title.strip()
     if title:
         return title
@@ -26,9 +26,10 @@ def site_name(url: str, feed_title: str = "") -> str:
 
 
 def check_feed(url: str) -> tuple[bool, str]:
+    """Пробует открыть одну ленту через feedparser."""
     parsed = feedparser.parse(
         url,
-        request_headers={"User-Agent": "telegram-bot-rss-check/0.1"},
+        request_headers={"User-Agent": CHECK_USER_AGENT},
     )
     count = len(parsed.entries)
     name = site_name(url, str(parsed.feed.get("title") or ""))
@@ -41,10 +42,8 @@ def check_feed(url: str) -> tuple[bool, str]:
 
 
 def main() -> int:
-    load_dotenv()
-    raw = os.getenv("RSS_FEED_URLS") or os.getenv("RSS_FEED_URL") or ""
-    urls = parse_feed_urls(raw)
-
+    """Печатает результат по каждой ссылке из RSS_FEED_URLS."""
+    urls = parse_feed_urls(rss_feeds_raw())
     if not urls:
         print("В .env нет RSS_FEED_URLS. Добавьте ссылки через запятую.")
         return 1
@@ -55,10 +54,9 @@ def main() -> int:
         print(f"→ {url}")
         try:
             ok, line = check_feed(url)
-        except Exception as exc:  # noqa: BLE001 — скрипт должен дойти до всех лент
+        except Exception as exc:
             ok = False
-            host = site_name(url)
-            line = f"❌ Ошибка: {host}, {exc}"
+            line = f"❌ Ошибка: {site_name(url)}, {exc}"
         print(line)
         print()
         if not ok:
@@ -67,7 +65,6 @@ def main() -> int:
     if failures:
         print(f"Готово: ошибок {failures} из {len(urls)}.")
         return 1
-
     print("Готово: все ленты открываются.")
     return 0
 

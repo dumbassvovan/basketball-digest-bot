@@ -1,28 +1,23 @@
-"""Вызовы OpenAI Chat Completions."""
+"""Запрос к OpenAI: отправить текст, получить ответ модели."""
 
 from __future__ import annotations
 
-import os
+import logging
 
-from dotenv import load_dotenv
 from openai import OpenAI
 
-DEFAULT_MODEL = "gpt-4o-mini"
+from bot.config import get_settings
+from bot.constants import (
+    DEFAULT_CHAT_MAX_TOKENS,
+    DEFAULT_CHAT_TEMPERATURE,
+    PLACEHOLDER_OPENAI_KEY,
+    SUMMARIZE_MAX_TOKENS,
+    SUMMARIZE_TEMPERATURE,
+)
 
+logger = logging.getLogger(__name__)
 
-def _api_key(api_key: str | None = None) -> str:
-    load_dotenv()
-    key = (api_key or os.getenv("OPENAI_API_KEY", "")).strip()
-    if not key or key == "your-openai-api-key":
-        raise RuntimeError(
-            "Не задан OPENAI_API_KEY. Добавьте ключ в файл .env."
-        )
-    return key
-
-
-def _model() -> str:
-    load_dotenv()
-    return os.getenv("OPENAI_MODEL", DEFAULT_MODEL).strip() or DEFAULT_MODEL
+SUMMARIZE_SYSTEM = "Кратко перескажи текст на русском, 2–4 предложения."
 
 
 def complete_chat(
@@ -30,28 +25,40 @@ def complete_chat(
     system: str,
     user: str,
     api_key: str | None = None,
-    temperature: float = 0.4,
-    max_tokens: int = 2000,
+    temperature: float = DEFAULT_CHAT_TEMPERATURE,
+    max_tokens: int = DEFAULT_CHAT_MAX_TOKENS,
 ) -> str:
-    client = OpenAI(api_key=_api_key(api_key))
-    response = client.chat.completions.create(
-        model=_model(),
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-        temperature=temperature,
-        max_tokens=max_tokens,
-    )
+    """Отправляет system+user в ChatGPT и возвращает текст ответа."""
+    settings = get_settings(require_bot_token=False)
+    key = (api_key or settings.openai_api_key).strip()
+    if not key or key == PLACEHOLDER_OPENAI_KEY:
+        raise RuntimeError("Не задан OPENAI_API_KEY. Добавьте ключ в файл .env.")
+
+    try:
+        client = OpenAI(api_key=key)
+        response = client.chat.completions.create(
+            model=settings.openai_model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+    except Exception as exc:
+        logger.warning("OpenAI не ответил: %s", exc)
+        raise RuntimeError(f"OpenAI не ответил: {exc}") from exc
+
     content = response.choices[0].message.content
     return (content or "").strip()
 
 
 def summarize_text(api_key: str, text: str) -> str:
+    """Короткий пересказ произвольного текста (команда /summarize)."""
     return complete_chat(
         api_key=api_key,
-        system="Кратко перескажи текст на русском, 2–4 предложения.",
+        system=SUMMARIZE_SYSTEM,
         user=text,
-        temperature=0.3,
-        max_tokens=300,
+        temperature=SUMMARIZE_TEMPERATURE,
+        max_tokens=SUMMARIZE_MAX_TOKENS,
     )

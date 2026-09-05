@@ -1,12 +1,14 @@
-"""Утренний дайджест: топ новостей → LLM → готовый пост для Telegram."""
+"""Утренний дайджест: топ новостей → нейросеть → готовый пост."""
 
 from __future__ import annotations
 
 from collections.abc import Sequence
 
+from bot.constants import DIGEST_MAX_TOKENS, DIGEST_TEMPERATURE, DIGEST_TOP_LIMIT, NEWS_HOURS
 from bot.services.openai_client import complete_chat
 from bot.services.rss import NewsItem, fetch_recent_news
 
+# Промпт редактора: модель должна вернуть сразу текст поста, без пояснений.
 EDITOR_PROMPT = (
     "Ты редактор баскетбольного Telegram-канала. Составь утренний дайджест "
     "из этих новостей. Формат: заголовок + 2–3 предложения сути + ссылка. "
@@ -16,6 +18,7 @@ EDITOR_PROMPT = (
 
 
 def format_news_for_llm(items: Sequence[NewsItem]) -> str:
+    """Собирает новости в понятный для модели список."""
     blocks: list[str] = []
     for index, item in enumerate(items, start=1):
         published = (
@@ -36,11 +39,11 @@ def format_news_for_llm(items: Sequence[NewsItem]) -> str:
 def compose_morning_digest(
     items: Sequence[NewsItem] | None = None,
     *,
-    limit: int = 10,
+    limit: int = DIGEST_TOP_LIMIT,
     api_key: str | None = None,
 ) -> str:
-    """Берёт топ-10 новостей, отправляет их в LLM и возвращает готовый пост."""
-    ranked = list(items) if items is not None else fetch_recent_news(hours=24)
+    """Берёт топ новостей, спрашивает LLM и возвращает текст поста."""
+    ranked = list(items) if items is not None else fetch_recent_news(hours=NEWS_HOURS)
     top = ranked[:limit]
     if not top:
         raise RuntimeError(
@@ -52,6 +55,6 @@ def compose_morning_digest(
         api_key=api_key,
         system=EDITOR_PROMPT,
         user=user_message,
-        temperature=0.5,
-        max_tokens=2500,
+        temperature=DIGEST_TEMPERATURE,
+        max_tokens=DIGEST_MAX_TOKENS,
     )

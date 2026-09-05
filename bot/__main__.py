@@ -1,4 +1,4 @@
-"""Точка входа: python -m bot"""
+"""Точка входа: python -m bot — запуск команд в личке Telegram."""
 
 from bot.app import main
 
