@@ -7,6 +7,8 @@ from dataclasses import dataclass
 
 from dotenv import load_dotenv
 
+from bot.services.rss import parse_feed_urls
+
 load_dotenv()
 
 
@@ -14,7 +16,7 @@ load_dotenv()
 class Settings:
     telegram_bot_token: str
     openai_api_key: str
-    rss_feed_url: str
+    rss_feed_urls: tuple[str, ...]
 
 
 def get_settings() -> Settings:
@@ -25,11 +27,13 @@ def get_settings() -> Settings:
             "и укажите токен бота от @BotFather."
         )
 
+    raw_feeds = os.getenv("RSS_FEED_URLS") or os.getenv("RSS_FEED_URL") or ""
+
     return Settings(
         telegram_bot_token=token,
         openai_api_key=os.getenv("OPENAI_API_KEY", "").strip(),
-        rss_feed_url=os.getenv(
-            "RSS_FEED_URL",
-            "https://news.ycombinator.com/rss",
-        ).strip(),
+        rss_feed_urls=tuple(
+            parse_feed_urls(raw_feeds)
+            or ["https://news.ycombinator.com/rss"]
+        ),
     )

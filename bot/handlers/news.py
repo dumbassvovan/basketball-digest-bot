@@ -12,14 +12,13 @@ async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     settings = get_settings()
-    try:
-        headlines = fetch_headlines(settings.rss_feed_url)
-    except Exception as exc:  # noqa: BLE001 — показываем ошибку пользователю
-        await update.message.reply_text(f"Не удалось загрузить ленту: {exc}")
-        return
+    headlines = fetch_headlines(settings.rss_feed_urls)
 
     if not headlines:
-        await update.message.reply_text("В ленте пока нет записей.")
+        await update.message.reply_text(
+            "Не удалось получить новости ни из одного источника. "
+            "Проверьте RSS_FEED_URLS в .env."
+        )
         return
 
     await update.message.reply_text("\n\n".join(headlines))

@@ -67,7 +67,7 @@ cp .env.example .env
 
 - `TELEGRAM_BOT_TOKEN` — токен от [@BotFather](https://t.me/BotFather)
 - `OPENAI_API_KEY` — ключ OpenAI (нужен для `/summarize`)
-- `RSS_FEED_URL` — адрес RSS-ленты для `/news` (по умолчанию Hacker News)
+- `RSS_FEED_URLS` — RSS-ленты через запятую для `/news` (битые источники пропускаются)
 
 `python-dotenv` подхватывает этот файл при старте бота. Не публикуйте `.env` в git: он уже в `.gitignore`.
 

@@ -18,7 +18,7 @@ from bot.services.rss import fetch_headlines
 
 def log_headlines() -> None:
     settings = get_settings()
-    for line in fetch_headlines(settings.rss_feed_url):
+    for line in fetch_headlines(settings.rss_feed_urls):
         print(line)
 
 
