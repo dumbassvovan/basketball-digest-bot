@@ -94,38 +94,7 @@ cp .env.example .env
 
 `python-dotenv` подхватывает этот файл при старте бота. Не публикуйте `.env` в git: он уже в `.gitignore`.
 
-## Проверка RSS до запуска бота
-
-```bash
-source .venv/bin/activate
-python check_rss.py
-```
-
-Скрипт читает `RSS_FEED_URLS` из `.env` и для каждой ссылки пишет успех или ошибку.
-
-## Тест публикации в канал
-
-В `.env` укажите `CHANNEL_USERNAME=@ваш_канал`. Бот должен быть администратором канала.
-
-```bash
-source .venv/bin/activate
-python send_channel_test.py
-```
-
-Скрипт отправит в канал текст «Привет, это тест».
-
-## Утренний дайджест
-
-Берёт топ-10 новостей (уже с весом) и просит LLM собрать пост для канала:
-
-```bash
-source .venv/bin/activate
-python generate_digest.py
-```
-
-В боте то же самое делает команда `/digest`. Нужен `OPENAI_API_KEY` в `.env`.
-
-## Запуск
+## Запуск локально
 
 ```bash
 source .venv/bin/activate
