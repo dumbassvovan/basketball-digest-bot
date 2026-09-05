@@ -21,7 +21,7 @@ from bot.constants import (
     PLACEHOLDER_YANDEX_FOLDER,
     PLACEHOLDER_YANDEX_KEY,
 )
-from bot.util import normalize_channel, parse_feed_urls
+from bot.util import normalize_channel, parse_feed_urls, sanitize_secret
 
 load_dotenv()
 
@@ -56,10 +56,10 @@ def get_settings(*, require_bot_token: bool = True) -> Settings:
             "и укажите токен бота от @BotFather."
         )
 
-    yandex_key = _env(ENV_YANDEX_KEY)
+    yandex_key = sanitize_secret(_env(ENV_YANDEX_KEY))
     if yandex_key == PLACEHOLDER_YANDEX_KEY:
         yandex_key = ""
-    folder_id = _env(ENV_YANDEX_FOLDER)
+    folder_id = sanitize_secret(_env(ENV_YANDEX_FOLDER))
     if folder_id == PLACEHOLDER_YANDEX_FOLDER:
         folder_id = ""
 

@@ -3,6 +3,27 @@
 from __future__ import annotations
 
 
+def sanitize_secret(raw: str) -> str:
+    """Убирает из секрета переносы строк, кавычки и префикс Api-Key."""
+    value = (
+        raw.replace("\r", "")
+        .replace("\n", "")
+        .replace("\t", "")
+        .replace("\ufeff", "")
+        .strip()
+    )
+    if (value.startswith('"') and value.endswith('"')) or (
+        value.startswith("'") and value.endswith("'")
+    ):
+        value = value[1:-1].strip()
+    lower = value.casefold()
+    if lower.startswith("api-key "):
+        value = value[8:].strip()
+    if lower.startswith("bearer "):
+        value = value[7:].strip()
+    return value
+
+
 def normalize_feed_url(url: str) -> str:
     """Чинит адрес, если потерялся слэш: https:/site → https://site."""
     url = url.strip()

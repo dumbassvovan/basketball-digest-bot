@@ -21,6 +21,7 @@ from bot.constants import (
     YANDEX_GPT_MODEL,
     YANDEX_REQUEST_TIMEOUT_SEC,
 )
+from bot.util import sanitize_secret
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +37,8 @@ def complete_chat(
 ) -> str:
     """Отправляет system+user в YandexGPT Lite и возвращает текст ответа."""
     settings = get_settings(require_bot_token=False)
-    api_key = settings.yandex_api_key
-    folder_id = settings.yandex_folder_id
+    api_key = "".join(sanitize_secret(settings.yandex_api_key).split())
+    folder_id = "".join(sanitize_secret(settings.yandex_folder_id).split())
     if not api_key:
         raise RuntimeError("Не задан YANDEX_API_KEY. Добавьте ключ в .env.")
     if not folder_id:
