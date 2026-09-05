@@ -2,11 +2,26 @@
 
 from __future__ import annotations
 
+import os
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from urllib.parse import urlparse
+
 import feedparser
 import requests
+from dotenv import load_dotenv
 from requests import HTTPError, RequestException
 
 REQUEST_TIMEOUT_SEC = 15
+USER_AGENT = "telegram-bot-rss/0.1"
+
+
+@dataclass(frozen=True)
+class NewsItem:
+    title: str
+    link: str
+    published: datetime | None
+    source: str
 
 
 def normalize_feed_url(url: str) -> str:
@@ -29,26 +44,96 @@ def parse_feed_urls(raw: str) -> list[str]:
     return urls
 
 
-def _fetch_one_feed(feed_url: str, limit: int) -> list[str]:
+def _source_name(parsed: feedparser.FeedParserDict, feed_url: str) -> str:
+    title = str(parsed.feed.get("title") or "").strip()
+    if title:
+        return title
+    host = urlparse(feed_url).netloc.removeprefix("www.")
+    return host or feed_url
+
+
+def _entry_published(entry: feedparser.FeedParserDict) -> datetime | None:
+    parsed_time = entry.get("published_parsed") or entry.get("updated_parsed")
+    if not parsed_time:
+        return None
+    try:
+        return datetime(*parsed_time[:6], tzinfo=timezone.utc)
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_feed(feed_url: str) -> feedparser.FeedParserDict:
     response = requests.get(
         feed_url,
         timeout=REQUEST_TIMEOUT_SEC,
-        headers={"User-Agent": "telegram-bot-rss/0.1"},
+        headers={"User-Agent": USER_AGENT},
     )
     response.raise_for_status()
     parsed = feedparser.parse(response.content)
     if parsed.bozo and not parsed.entries:
-        raise RuntimeError(f"Не удалось прочитать RSS: {feed_url}")
-
-    headlines: list[str] = []
-    for entry in parsed.entries[:limit]:
-        title = getattr(entry, "title", "").strip() or "(без заголовка)"
-        link = getattr(entry, "link", "").strip()
-        headlines.append(f"• {title}\n  {link}" if link else f"• {title}")
-    return headlines
+        error = parsed.bozo_exception or "лента пустая или это не RSS"
+        raise RuntimeError(str(error))
+    return parsed
 
 
-def fetch_headlines(feed_urls: list[str] | tuple[str, ...] | str, limit: int = 5) -> list[str]:
+def fetch_recent_news(
+    *,
+    hours: int = 24,
+    env_var: str = "RSS_FEED_URLS",
+) -> list[NewsItem]:
+    """Берёт RSS-ссылки из переменной окружения и возвращает новости за период.
+
+    Ссылки в переменной задаются через запятую. Недоступные ленты пропускаются
+    с предупреждением в консоль. У каждой новости: заголовок, ссылка, дата, источник.
+    """
+    load_dotenv()
+    raw = os.getenv(env_var) or os.getenv("RSS_FEED_URL") or ""
+    urls = parse_feed_urls(raw)
+    if not urls:
+        print(f"Предупреждение: в окружении нет {env_var}.")
+        return []
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+    items: list[NewsItem] = []
+
+    for url in urls:
+        try:
+            parsed = _parse_feed(url)
+        except HTTPError as exc:
+            status = exc.response.status_code if exc.response is not None else "?"
+            print(f"Предупреждение: источник RSS недоступен ({status}): {url}")
+            continue
+        except (RequestException, RuntimeError) as exc:
+            print(f"Предупреждение: не удалось загрузить RSS {url}: {exc}")
+            continue
+
+        source = _source_name(parsed, url)
+        for entry in parsed.entries:
+            published = _entry_published(entry)
+            if published is None or published < cutoff:
+                continue
+            title = str(entry.get("title") or "").strip() or "(без заголовка)"
+            link = str(entry.get("link") or "").strip()
+            items.append(
+                NewsItem(
+                    title=title,
+                    link=link,
+                    published=published,
+                    source=source,
+                )
+            )
+
+    items.sort(
+        key=lambda item: item.published or datetime.min.replace(tzinfo=timezone.utc),
+        reverse=True,
+    )
+    return items
+
+
+def fetch_headlines(
+    feed_urls: list[str] | tuple[str, ...] | str,
+    limit: int = 5,
+) -> list[str]:
     if isinstance(feed_urls, str):
         urls = parse_feed_urls(feed_urls)
     else:
@@ -57,10 +142,17 @@ def fetch_headlines(feed_urls: list[str] | tuple[str, ...] | str, limit: int = 5
     headlines: list[str] = []
     for url in urls:
         try:
-            headlines.extend(_fetch_one_feed(url, limit))
+            parsed = _parse_feed(url)
         except HTTPError as exc:
             status = exc.response.status_code if exc.response is not None else "?"
             print(f"Предупреждение: источник RSS недоступен ({status}): {url}")
+            continue
         except (RequestException, RuntimeError) as exc:
             print(f"Предупреждение: не удалось загрузить RSS {url}: {exc}")
+            continue
+
+        for entry in parsed.entries[:limit]:
+            title = str(entry.get("title") or "").strip() or "(без заголовка)"
+            link = str(entry.get("link") or "").strip()
+            headlines.append(f"• {title}\n  {link}" if link else f"• {title}")
     return headlines

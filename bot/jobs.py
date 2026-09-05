@@ -12,14 +12,13 @@ import time
 
 import schedule
 
-from bot.config import get_settings
-from bot.services.rss import fetch_headlines
+from bot.services.rss import fetch_recent_news
 
 
 def log_headlines() -> None:
-    settings = get_settings()
-    for line in fetch_headlines(settings.rss_feed_urls):
-        print(line)
+    for item in fetch_recent_news(hours=24):
+        published = item.published.isoformat() if item.published else "?"
+        print(f"{published} | {item.source} | {item.title} | {item.link}")
 
 
 def run_scheduler() -> None:
