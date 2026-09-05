@@ -67,7 +67,8 @@ cp .env.example .env
 
 - `TELEGRAM_BOT_TOKEN` — токен от [@BotFather](https://t.me/BotFather)
 - `CHANNEL_USERNAME` — username канала для тестовой публикации (`@my_channel`)
-- `OPENAI_API_KEY` — ключ OpenAI (нужен для `/summarize`)
+- `OPENAI_API_KEY` — ключ OpenAI (нужен для `/digest` и `/summarize`)
+- `OPENAI_MODEL` — необязательно, по умолчанию `gpt-4o-mini`
 - `RSS_FEED_URLS` — RSS-ленты через запятую для `/news` (битые источники пропускаются)
 - `NEWS_KEYWORDS` — необязательный фильтр тем через запятую (по умолчанию NBA, баскетбол, Евролига, ВТБ и близкие слова)
 
@@ -92,6 +93,17 @@ python send_channel_test.py
 ```
 
 Скрипт отправит в канал текст «Привет, это тест».
+
+## Утренний дайджест
+
+Берёт топ-10 новостей (уже с весом) и просит LLM собрать пост для канала:
+
+```bash
+source .venv/bin/activate
+python generate_digest.py
+```
+
+В боте то же самое делает команда `/digest`. Нужен `OPENAI_API_KEY` в `.env`.
 
 ## Запуск
 
