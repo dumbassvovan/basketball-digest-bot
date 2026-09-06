@@ -9,9 +9,9 @@ from __future__ import annotations
 import logging
 from collections.abc import Sequence
 
-from bot.constants import DIGEST_TOP_LIMIT, NEWS_HOURS
+from bot.constants import DIGEST_MAX_PER_SOURCE, DIGEST_TOP_LIMIT, NEWS_HOURS
 from bot.services.digest import compose_morning_digest
-from bot.services.rss import NewsItem, collect_news, filter_and_rank
+from bot.services.rss import NewsItem, collect_news, filter_and_rank, take_top_stories
 from bot.services.telegram_channel import publish_to_channel
 
 logger = logging.getLogger(__name__)
@@ -31,15 +31,15 @@ def filter_step(
     """Шаг 2: баскетбольный фильтр, вес, топ-N для нейросети."""
     logger.info("Шаг 2/4: фильтрую по ключевым словам и считаю вес.")
     ranked = filter_and_rank(list(items))
-    top = ranked[:limit]
+    top = take_top_stories(ranked, limit, max_per_source=DIGEST_MAX_PER_SOURCE)
     logger.info(
-        "После фильтра: %s, в дайджест берём топ-%s (макс. вес %s).",
+        "После фильтра: %s сюжетов, в дайджест берём топ-%s (макс. изданий на сюжет: %s).",
         len(ranked),
         len(top),
         top[0].weight if top else 0,
     )
     for index, item in enumerate(top, start=1):
-        logger.info("  %s. вес=%s | %s | %s", index, item.weight, item.source, item.title)
+        logger.info("  %s. изданий=%s | %s | %s", index, item.weight, item.source, item.title)
     return top
 
 
@@ -62,7 +62,7 @@ def publish_step(post: str) -> list[int]:
 def _dry_run_preview(top: Sequence[NewsItem]) -> str:
     """Текст для проверки без OpenAI и без публикации."""
     return "\n".join(
-        f"{index}. [{item.weight}] {item.title} — {item.link}"
+        f"{index}. [{item.weight} изд.] {item.title} — {item.link}"
         for index, item in enumerate(top, start=1)
     )
 

@@ -22,7 +22,7 @@ def _format_item(item: NewsItem) -> str:
         else "дата неизвестна"
     )
     link = f"\n{item.link}" if item.link else ""
-    return f"• [{item.weight}] {item.title}\n  {item.source} · {published}{link}"
+    return f"• [{item.weight} изд.] {item.title}\n  {item.source} · {published}{link}"
 
 
 async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

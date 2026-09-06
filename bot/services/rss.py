@@ -21,14 +21,11 @@ from requests import HTTPError, RequestException
 from bot.config import rss_feeds_raw
 from bot.constants import NEWS_HOURS, RSS_TIMEOUT_SEC, RSS_USER_AGENT
 from bot.services.ranking import (
-    cosine_similarity,
+    cluster_title_indices,
     entry_language,
     is_russian_news,
     matches_keywords,
     parse_keywords,
-    same_source,
-    similarity_threshold,
-    title_vector,
 )
 from bot.util import parse_feed_urls
 
@@ -37,7 +34,10 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class NewsItem:
-    """Одна новость: заголовок, ссылка, дата, сайт, вес и краткий текст из RSS."""
+    """Одна новость: заголовок, ссылка, дата, сайт.
+
+    weight — сколько разных изданий написали похожий сюжет (обсуждаемость).
+    """
 
     title: str
     link: str
@@ -155,7 +155,7 @@ def collect_news(*, hours: int = NEWS_HOURS) -> list[NewsItem]:
 
 
 def filter_and_rank(items: list[NewsItem]) -> list[NewsItem]:
-    """Оставляет баскетбол и ставит вес по похожим заголовкам на других сайтах."""
+    """Оставляет баскетбол и один пункт на сюжет, сначала самые обсуждаемые."""
     keywords = parse_keywords()
     kept = [
         item
@@ -169,8 +169,12 @@ def filter_and_rank(items: list[NewsItem]) -> list[NewsItem]:
         len(items),
         len(kept),
     )
-    ranked = _rank_by_similar_sources(kept)
-    logger.info("Ранжирование по cosine similarity завершено.")
+    ranked = _rank_by_discussion(kept)
+    logger.info(
+        "Сюжетов после склейки похожих заголовков: %s (из %s новостей).",
+        len(ranked),
+        len(kept),
+    )
     return ranked
 
 
@@ -179,33 +183,73 @@ def fetch_recent_news(*, hours: int = NEWS_HOURS) -> list[NewsItem]:
     return filter_and_rank(collect_news(hours=hours))
 
 
-def _pair_weights(items: list[NewsItem]) -> list[int]:
-    """Для каждой новости: сколько похожих заголовков на других сайтах."""
-    threshold = similarity_threshold()
-    vectors = [title_vector(item.title) for item in items]
-    weights = [0] * len(items)
-    for i, left in enumerate(items):
-        for j in range(i + 1, len(items)):
-            right = items[j]
-            if same_source(left.source, right.source):
-                continue
-            if cosine_similarity(vectors[i], vectors[j]) >= threshold:
-                weights[i] += 1
-                weights[j] += 1
-    return weights
+def _empty_published() -> datetime:
+    return datetime.min.replace(tzinfo=timezone.utc)
 
 
-def _rank_by_similar_sources(items: list[NewsItem]) -> list[NewsItem]:
-    """Вешает вес на новости и сортирует: сначала больший вес, потом свежее."""
-    weights = _pair_weights(items)
-    ranked = [
-        replace(item, weight=weights[index]) for index, item in enumerate(items)
-    ]
+def _pick_cluster_item(cluster: list[NewsItem]) -> NewsItem:
+    """Из сюжета берём свежую карточку со ссылкой — её и покажем в дайджесте."""
+    return max(
+        cluster,
+        key=lambda item: (
+            1 if item.link.strip() else 0,
+            item.published or _empty_published(),
+        ),
+    )
+
+
+def _rank_by_discussion(items: list[NewsItem]) -> list[NewsItem]:
+    """Склеивает похожие заголовки в сюжеты и сортирует по числу изданий."""
+    if not items:
+        return []
+    groups = cluster_title_indices([item.title for item in items])
+    ranked: list[NewsItem] = []
+    for indices in groups:
+        cluster = [items[index] for index in indices]
+        sources = {item.source.strip().casefold() for item in cluster if item.source.strip()}
+        weight = len(sources) if sources else 1
+        picked = replace(_pick_cluster_item(cluster), weight=weight)
+        ranked.append(picked)
+        if weight > 1:
+            logger.info(
+                "Сюжет ×%s: %s",
+                weight,
+                picked.title,
+            )
     ranked.sort(
         key=lambda item: (
             item.weight,
-            item.published or datetime.min.replace(tzinfo=timezone.utc),
+            item.published or _empty_published(),
         ),
         reverse=True,
     )
     return ranked
+
+
+def take_top_stories(
+    items: list[NewsItem],
+    limit: int,
+    *,
+    max_per_source: int = 3,
+) -> list[NewsItem]:
+    """Топ сюжетов: сначала много изданий, одиночные — с разных сайтов."""
+    if limit <= 0:
+        return []
+    chosen: list[NewsItem] = []
+    overflow: list[NewsItem] = []
+    per_source: dict[str, int] = {}
+    for item in items:
+        source = item.source.strip().casefold() or "unknown"
+        used = per_source.get(source, 0)
+        if item.weight > 1 or used < max_per_source:
+            chosen.append(item)
+            per_source[source] = used + 1
+            if len(chosen) >= limit:
+                return chosen
+        else:
+            overflow.append(item)
+    for item in overflow:
+        chosen.append(item)
+        if len(chosen) >= limit:
+            break
+    return chosen

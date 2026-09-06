@@ -1,7 +1,8 @@
 """Ключевые слова и похожесть заголовков (cosine similarity).
 
-Зачем: из ленты выкидываем не-баскетбол и поднимаем сюжеты,
-которые повторили несколько изданий.
+Зачем: из ленты выкидываем не-баскетбол и склеиваем один сюжет,
+который повторили несколько изданий — это наш сигнал «обсуждаемости».
+Просмотров в RSS нет.
 """
 
 from __future__ import annotations
@@ -136,10 +137,15 @@ def matches_keywords(text: str, keywords: tuple[str, ...] | None = None) -> bool
     return False
 
 
+def _normalize_title(title: str) -> str:
+    """Нижний регистр и «ё» → «е», чтобы одни и те же сюжеты сходились."""
+    return title.casefold().replace("ё", "е")
+
+
 def title_tokens(title: str) -> list[str]:
     """Режет заголовок на слова, выкидывает короткие и стоп-слова."""
     tokens: list[str] = []
-    for token in TOKEN_RE.findall(title.casefold()):
+    for token in TOKEN_RE.findall(_normalize_title(title)):
         if len(token) < MIN_TOKEN_LENGTH or token in STOPWORDS:
             continue
         tokens.append(token)
@@ -178,5 +184,38 @@ def similarity_threshold() -> float:
 
 
 def same_source(left: str, right: str) -> bool:
-    """Один и тот же сайт? Тогда пару для веса не считаем."""
+    """Один и тот же сайт (для логов и сравнений)."""
     return left.strip().casefold() == right.strip().casefold()
+
+
+def cluster_title_indices(
+    titles: list[str],
+    *,
+    threshold: float | None = None,
+) -> list[list[int]]:
+    """Группы индексов с похожими заголовками (один сюжет — одна группа)."""
+    limit = similarity_threshold() if threshold is None else threshold
+    vectors = [title_vector(title) for title in titles]
+    n = len(titles)
+    parent = list(range(n))
+
+    def find(index: int) -> int:
+        while parent[index] != index:
+            parent[index] = parent[parent[index]]
+            index = parent[index]
+        return index
+
+    def union(left: int, right: int) -> None:
+        root_left, root_right = find(left), find(right)
+        if root_left != root_right:
+            parent[root_right] = root_left
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            if cosine_similarity(vectors[i], vectors[j]) >= limit:
+                union(i, j)
+
+    groups: dict[int, list[int]] = {}
+    for i in range(n):
+        groups.setdefault(find(i), []).append(i)
+    return list(groups.values())

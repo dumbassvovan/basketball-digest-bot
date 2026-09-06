@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from bot.constants import DIGEST_MAX_TOKENS, DIGEST_TEMPERATURE, DIGEST_TOP_LIMIT, NEWS_HOURS
-from bot.services.rss import NewsItem, fetch_recent_news
+from bot.constants import DIGEST_MAX_PER_SOURCE, DIGEST_MAX_TOKENS, DIGEST_TEMPERATURE, DIGEST_TOP_LIMIT, NEWS_HOURS
+from bot.services.rss import NewsItem, fetch_recent_news, take_top_stories
 from bot.services.yandex_client import complete_chat
 
 # Модель пишет только шапку поста. Список новостей собираем сами:
@@ -49,7 +49,7 @@ def compose_morning_digest(
 ) -> str:
     """Берёт топ новостей: LLM — вступление, дальше заголовок + ссылка."""
     ranked = list(items) if items is not None else fetch_recent_news(hours=NEWS_HOURS)
-    top = ranked[:limit]
+    top = take_top_stories(ranked, limit, max_per_source=DIGEST_MAX_PER_SOURCE)
     if not top:
         raise RuntimeError(
             "Нет новостей для дайджеста. Проверьте RSS_FEED_URLS и NEWS_KEYWORDS."
