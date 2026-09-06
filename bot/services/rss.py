@@ -22,6 +22,8 @@ from bot.config import rss_feeds_raw
 from bot.constants import NEWS_HOURS, RSS_TIMEOUT_SEC, RSS_USER_AGENT
 from bot.services.ranking import (
     cosine_similarity,
+    entry_language,
+    is_russian_news,
     matches_keywords,
     parse_keywords,
     same_source,
@@ -85,14 +87,20 @@ def _items_from_feed(
     source: str,
     cutoff: datetime,
 ) -> list[NewsItem]:
-    """Достаёт из одной ленты новости не старше cutoff."""
+    """Достаёт из одной ленты свежие русскоязычные новости."""
+    feed_language = str(parsed.feed.get("language") or parsed.feed.get("lang") or "")
     items: list[NewsItem] = []
+    skipped_lang = 0
     for entry in parsed.entries:
         published = _entry_published(entry)
         if published is None or published < cutoff:
             continue
         title = str(entry.get("title") or "").strip() or "(без заголовка)"
         summary = str(entry.get("summary") or entry.get("description") or "")
+        language = entry_language(entry, feed_language)
+        if not is_russian_news(title, summary, language):
+            skipped_lang += 1
+            continue
         link = str(entry.get("link") or "").strip()
         items.append(
             NewsItem(
@@ -102,6 +110,12 @@ def _items_from_feed(
                 source=source,
                 summary=summary,
             )
+        )
+    if skipped_lang:
+        logger.info(
+            "Лента %s: пропущено нерусских записей — %s",
+            source,
+            skipped_lang,
         )
     return items
 

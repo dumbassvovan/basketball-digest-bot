@@ -90,7 +90,7 @@ cp .env.example .env
 - `YANDEX_API_KEY` — API-ключ сервисного аккаунта Yandex Cloud
 - `YANDEX_FOLDER_ID` — ID каталога в Yandex Cloud (как узнать — ниже)
 - `RSS_FEED_URLS` — RSS-ленты через запятую
-- `NEWS_KEYWORDS` — необязательный фильтр тем
+- `NEWS_KEYWORDS` — необязательный фильтр тем (русские слова через запятую)
 
 ### Как узнать YANDEX_FOLDER_ID
 

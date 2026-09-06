@@ -13,27 +13,25 @@ from collections import Counter
 
 from bot.constants import DEFAULT_SIMILARITY_THRESHOLD, ENV_KEYWORDS, ENV_SIMILARITY
 
-# Слова, по которым узнаём баскетбольную тему (можно переопределить в .env).
+# Слова, по которым узнаём баскетбольную тему (только русский; можно переопределить в .env).
 DEFAULT_KEYWORDS = (
-    "nba",
-    "нба",
-    "wnba",
     "баскетбол",
-    "basketball",
-    "basket",
+    "нба",
+    "внба",
     "евролига",
-    "euroleague",
-    "eurocup",
     "еврокубок",
     "втб",
-    "vtb",
-    "fiba",
     "фиба",
-    "ncaa",
     "единая лига",
-    "united league",
     "цска",
-    "cska",
+    "трансфер",
+    "контракт",
+    "свободный агент",
+    "плей-офф",
+    "финал",
+    "драфт",
+    "травма",
+    "мвп",
 )
 
 # Короткие слова, которые не помогают понять тему («в», «the»…).
@@ -80,7 +78,34 @@ STOPWORDS = {
 }
 
 TOKEN_RE = re.compile(r"[a-zа-яё0-9]+", re.IGNORECASE)
+CYRILLIC_RE = re.compile(r"[а-яё]", re.IGNORECASE)
 MIN_TOKEN_LENGTH = 3
+RU_LANGUAGE_TAGS = ("ru", "rus", "ru-ru", "ru_ru", "russian")
+
+
+def entry_language(entry: object, feed_language: str = "") -> str:
+    """Язык из записи RSS или из ленты целиком."""
+    lang = ""
+    if isinstance(entry, dict):
+        lang = str(entry.get("language") or entry.get("lang") or "").strip()
+    else:
+        lang = str(getattr(entry, "language", "") or getattr(entry, "lang", "") or "").strip()
+    return (lang or feed_language).strip()
+
+
+def is_russian_news(title: str, summary: str = "", language: str = "") -> bool:
+    """True, если новость на русском: тег language или кириллица в тексте.
+
+    Явный иностранный language (en, el, …) отбрасываем. Если тега нет —
+    оставляем только тексты с буквами а–я.
+    """
+    lang = language.strip().casefold().replace("_", "-")
+    if lang:
+        lang_main = lang.split("-")[0]
+        if lang_main not in {"ru", "rus"}:
+            return False
+    text = f"{title} {summary}"
+    return CYRILLIC_RE.search(text) is not None
 
 
 def parse_keywords(raw: str | None = None) -> tuple[str, ...]:
