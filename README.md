@@ -89,8 +89,36 @@ cp .env.example .env
 - `CHANNEL_USERNAME` — username канала (`@my_channel`)
 - `YANDEX_API_KEY` — API-ключ сервисного аккаунта Yandex Cloud
 - `YANDEX_FOLDER_ID` — ID каталога в Yandex Cloud (как узнать — ниже)
-- `RSS_FEED_URLS` — RSS-ленты через запятую
+- `RSS_FEED_URLS` — RSS-ленты через запятую (см. список ниже)
 - `NEWS_KEYWORDS` — необязательный фильтр тем (русские слова через запятую)
+
+### Русские RSS по баскетболу
+
+Открытых лент мало: у крупных СМИ либо общий спорт, либо старые URL уже не работают. Ниже — то, что отвечает 200 и отдаёт XML на русском по баскетболу (проверка 2026-09).
+
+**Берём в дайджест** (это значение по умолчанию в `.env.example`):
+
+| Источник | URL |
+|---|---|
+| Eurohoops (русская редакция) | `https://www.eurohoops.net/ru/feed/` |
+| Чемпионат | `https://www.championat.com/rss/news/basketball/` |
+| Sports.ru, рубрика «Баскетбол» | `https://www.sports.ru/rss/rubric.xml?id=210` |
+| Sportbox | `https://news.sportbox.ru/taxonomy/term/45/0/feed` |
+| Матч ТВ | `https://matchtv.ru/articles/rss/basketball` |
+| Спорт-Экспресс | `https://www.sport-express.ru/services/materials/news/basketball/se/` |
+| Basket.ru | `https://www.basket.ru/news/rss` (редирект на `/news/feed/`) |
+
+**Не подключать:**
+
+- `https://www.championat.com/basketball/rss.xml` — HTML, не RSS
+- `https://news.sportbox.ru/Vidy_sporta/Basketbol/rss` — 404
+- `https://basket.ru/rss.xml` — 404
+- `https://rsport.ria.ru/export/rss2/basketball/index.xml` — 404 (есть только общий спорт: `…/export/rss2/index.xml`)
+- `https://www.sports.ru/rss/rubric.xml?id=208` — это футбол, не баскетбол
+- Ленты Lenta / Газета.Ru / РИА Спорт целиком — смешанный спорт, баскетбола почти нет
+- NBA.com, Euroleague.com — английский; бот такие пункты отбрасывает
+
+После смены списка обновите и секрет GitHub Actions `RSS_FEED_URLS`: локальный `.env` туда сам не попадает.
 
 ### Как узнать YANDEX_FOLDER_ID
 
